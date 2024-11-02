@@ -3,6 +3,8 @@ using FlashcardApp.Core.Services.Interfaces;
 using FlashcardApp.Console.MessageLoggers;
 using FlashcardApp.Core.Models;
 using FlashcardApp.Core.DTOs;
+using FlashcardApp.Core.Services;
+using System.Text.RegularExpressions;
 
 namespace FlashcardApp.Console.Menus;
 
@@ -161,17 +163,19 @@ public class MainMenu
            .MoreChoicesText("[grey](Move up and down to reveal more choices)[/]")
            .AddChoices(stackNames));
         var flashcardList = await GetAllFlashcards(flashCardStackName);
-
-        var flashCardQuestionName = AnsiConsole.Prompt(
-        new SelectionPrompt<string>()
-            .Title("Select a [green]stack[/] Where the flashcard resides")
-            .PageSize(10)
-            .MoreChoicesText("[grey](Move up and down to reveal more choices)[/]")
-            .AddChoices(flashcardList));
-        var flashcard = await GetFlashcard(flashCardQuestionName);
-        if (flashcard != null)
+        if(flashcardList != null)
         {
-            await DeleteFlashcard(flashcard);
+            var flashCardQuestionName = AnsiConsole.Prompt (
+            new SelectionPrompt<string> ()
+            .Title ("Select a [green]stack[/] Where the flashcard resides")
+            .PageSize (10)
+            .MoreChoicesText ("[grey](Move up and down to reveal more choices)[/]")
+            .AddChoices (flashcardList));
+            var flashcard = await GetFlashcard (flashCardQuestionName);
+            if (flashcard != null)
+            {
+                await DeleteFlashcard (flashcard);
+            }
         }
     }
 
@@ -202,6 +206,11 @@ public class MainMenu
     private async Task<string[]> GetAllFlashcards(string name)
     {
         var flashcards = await _flashcardService.GetFlashcardsByStackname(name);
+        if (!flashcards.IsSuccess)
+        {
+            MessageLogger.DisplayErrorMessage (flashcards.ErrorMessage);
+            return null;
+        }
         var flashcardList = flashcards.Value.Select(flashcard => flashcard.Question).OrderBy(q => q).ToArray();
         return flashcardList;
     }
@@ -348,6 +357,7 @@ public class MainMenu
     private async Task DisplayReportMenu()
     {
         var currentYear = await CheckPrompt("Please enter a year in (Format: yyyy):  ");
+        currentYear = await GetYear(currentYear);
         var result = await _studySessionService.GetStudySessionsReport(currentYear);
         if (!result.IsSuccess)
         {
@@ -410,5 +420,21 @@ public class MainMenu
             }
         } while (string.IsNullOrEmpty(prompt));
         return prompt.ToLower();
+    }
+    public async Task<string> GetYear(string year)
+    {
+        string pattern = @"\b\d{4}\b";
+        var match = false;
+        do
+        {
+            match = Regex.IsMatch (year, pattern);
+            if (!match)
+            {
+                AnsiConsole.MarkupLine ("[red]Not in the correct format or data type does not match. Try again, please[/]");
+                year = AnsiConsole.Prompt (
+                new TextPrompt<string> ("Please enter a year in (Format: yyyy): ").AllowEmpty ());
+            }
+        } while (!match);
+        return year;
     }
 }
